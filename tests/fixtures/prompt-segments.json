@@ -1,0 +1,59 @@
+[
+  {
+    "name": "developer-clean",
+    "directory": "~/workspace/bacumi",
+    "branch": "feature/bacumi",
+    "conflicts": 0,
+    "operation": "",
+    "success": true,
+    "exit": 0,
+    "context": [
+      "node:22.4.0",
+      "venv:bacumi"
+    ],
+    "duration": 3.2
+  },
+  {
+    "name": "merge-failure",
+    "directory": "/work/a very long directory/project",
+    "branch": "feature/very-long-branch-name",
+    "conflicts": 1,
+    "operation": "merge",
+    "success": false,
+    "exit": 9,
+    "context": [
+      "node:22.4.0",
+      "venv:bacumi"
+    ],
+    "duration": 3.2
+  },
+  {
+    "name": "unicode-literal",
+    "directory": "/work/漢字/écho/$(unsafe)%",
+    "branch": "feature/漢字é%",
+    "conflicts": 1,
+    "operation": "rebase",
+    "success": false,
+    "exit": 127,
+    "context": [
+      "node:22.4.0",
+      "venv:漢字"
+    ],
+    "duration": 3.2
+  },
+  {
+    "name": "status-unavailable",
+    "directory": "/work/a very long directory/project",
+    "branch": "feature/status-timeout",
+    "conflicts": 0,
+    "operation": "",
+    "success": false,
+    "exit": 9,
+    "context": [
+      "node:22.4.0",
+      "venv:bacumi"
+    ],
+    "duration": 3.2,
+    "unavailable": true
+  }
+]

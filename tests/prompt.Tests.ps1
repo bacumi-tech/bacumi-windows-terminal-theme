@@ -159,6 +159,10 @@ try {
         [IO.File]::WriteAllText($fakeNode, "#!/bin/sh`necho call >> '" + $counter.Replace("'", "'\''") + "'`nprintf 'v22.4.0\n'`n")
         & chmod +x $fakeNode
     }
+    # First execution of a new script may trigger platform scanning. Keep cache tests
+    # about cached probe behavior; separate probe tests cover slow first execution.
+    & $fakeNode --version | Out-Null
+    Remove-Item -LiteralPath $counter
     $oldPath = $env:PATH
     try {
         $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $oldPath

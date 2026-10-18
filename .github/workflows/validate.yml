@@ -1,7 +1,7 @@
 name: Validate themes and native installer
 on:
   push:
-    branches: [main]
+    branches: [main, "fix/mbc/**"]
   pull_request:
 permissions:
   contents: read
@@ -27,6 +27,8 @@ jobs:
           $PSVersionTable.PSVersion
           ./tests/install.Tests.ps1
           ./tests/prompt.Tests.ps1
+          ./tests/prompt-probes.Tests.ps1
+          ./tests/prompt-segments.Tests.ps1
           ./tests/install-prompt.Tests.ps1
           ./tests/font.Tests.ps1
           ./scripts/benchmark-prompt.ps1 -Samples 10
@@ -36,6 +38,8 @@ jobs:
           $PSVersionTable.PSVersion
           ./tests/install.Tests.ps1
           ./tests/prompt.Tests.ps1
+          ./tests/prompt-probes.Tests.ps1
+          ./tests/prompt-segments.Tests.ps1
           ./tests/install-prompt.Tests.ps1
           ./tests/font.Tests.ps1
           ./scripts/benchmark-prompt.ps1 -Samples 10

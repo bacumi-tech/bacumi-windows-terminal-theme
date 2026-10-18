@@ -7,6 +7,169 @@ $script:runtimeCache = @{}
 $script:settings = @{}
 $script:lastObservedError = $null
 
+# One in-process helper drains both pipes without PowerShell callbacks or jobs.
+# Compile once per shell; module reloads reuse the type. Windows jobs also own .cmd children.
+if (-not ('BacumiPrompt.NativeProbe' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+namespace BacumiPrompt {
+    public sealed class ProbeResult {
+        public bool Success;
+        public string Output = "";
+    }
+    public static class NativeProbe {
+        private sealed class Capture {
+            internal readonly StringBuilder Text = new StringBuilder();
+            internal int Overflow;
+        }
+        private static void Drain(StreamReader stream, Capture capture, int limit) {
+            try {
+                char[] buffer = new char[1024];
+                int count;
+                while ((count = stream.Read(buffer, 0, buffer.Length)) > 0) {
+                    lock (capture.Text) {
+                        if (capture.Text.Length + count > limit) {
+                            Interlocked.Exchange(ref capture.Overflow, 1);
+                            return;
+                        }
+                        capture.Text.Append(buffer, 0, count);
+                    }
+                }
+            } catch (IOException) {} catch (ObjectDisposedException) {}
+        }
+        // CommandLineToArgvW-compatible quoting for ProcessStartInfo.Arguments (.NET Framework).
+        private static string Quote(string value) {
+            var output = new StringBuilder("\"");
+            int slashes = 0;
+            foreach (char c in value) {
+                if (c == '\\') { slashes++; continue; }
+                if (c == '"') { output.Append('\\', slashes * 2 + 1); output.Append(c); }
+                else { output.Append('\\', slashes); output.Append(c); }
+                slashes = 0;
+            }
+            output.Append('\\', slashes * 2); output.Append('"');
+            return output.ToString();
+        }
+        [StructLayout(LayoutKind.Sequential)] private struct BasicLimit {
+            public long ProcessTime, JobTime;
+            public uint Flags;
+            public UIntPtr MinWorkingSet, MaxWorkingSet;
+            public uint ActiveProcessLimit;
+            public UIntPtr Affinity;
+            public uint PriorityClass, SchedulingClass;
+        }
+        [StructLayout(LayoutKind.Sequential)] private struct IoCounters {
+            public ulong ReadOps, WriteOps, OtherOps, ReadBytes, WriteBytes, OtherBytes;
+        }
+        [StructLayout(LayoutKind.Sequential)] private struct ExtendedLimit {
+            public BasicLimit Basic;
+            public IoCounters Io;
+            public UIntPtr ProcessMemory, JobMemory, PeakProcessMemory, PeakJobMemory;
+        }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+        [DllImport("kernel32.dll")] private static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref ExtendedLimit info, uint length);
+        [DllImport("kernel32.dll")] private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+        private static IntPtr CreateOwnedJob() {
+            IntPtr job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero) return job;
+            var limit = new ExtendedLimit();
+            limit.Basic.Flags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            if (!SetInformationJobObject(job, 9, ref limit, (uint)Marshal.SizeOf(limit))) { CloseHandle(job); return IntPtr.Zero; }
+            return job;
+        }
+        private static void Stop(Process process) {
+            try {
+                MethodInfo killTree = typeof(Process).GetMethod("Kill", new Type[] { typeof(bool) });
+                if (killTree != null) killTree.Invoke(process, new object[] { true });
+                else process.Kill();
+            } catch {} // It may have exited between the deadline and termination.
+        }
+        public static ProbeResult Run(string executable, string[] arguments, string directory, int milliseconds, int outputLimit) {
+            var result = new ProbeResult();
+            if (milliseconds <= 0) return result;
+            bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
+            var start = new ProcessStartInfo();
+            start.FileName = executable;
+            var commandLine = new StringBuilder();
+            foreach (string argument in arguments) { if (commandLine.Length > 0) commandLine.Append(' '); commandLine.Append(Quote(argument)); }
+            start.Arguments = commandLine.ToString();
+            if (windows && (executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || executable.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))) {
+                // Expand the path once from the child environment; literal % or ! in paths
+                // must never become another environment expansion. Probe arguments are fixed switches.
+                start.FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
+                start.EnvironmentVariables["BACUMI_PROMPT_PROBE_EXECUTABLE"] = executable;
+                start.Arguments = "/d /s /v:off /c \"\"%BACUMI_PROMPT_PROBE_EXECUTABLE%\" " + start.Arguments + "\"";
+            }
+            start.WorkingDirectory = directory;
+            start.UseShellExecute = false;
+            start.CreateNoWindow = true;
+            start.RedirectStandardInput = true;
+            start.RedirectStandardOutput = true;
+            start.RedirectStandardError = true;
+            start.EnvironmentVariables["GOTOOLCHAIN"] = "local";
+            start.EnvironmentVariables["RUSTUP_AUTO_INSTALL"] = "0";
+            start.EnvironmentVariables["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+            start.EnvironmentVariables["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+            start.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            start.EnvironmentVariables["GCM_INTERACTIVE"] = "Never";
+            IntPtr job = IntPtr.Zero;
+            var process = new Process();
+            process.StartInfo = start;
+            var clock = Stopwatch.StartNew();
+            try {
+                if (windows) {
+                    job = CreateOwnedJob();
+                    if (job == IntPtr.Zero) return result; // No unmanaged child without tree cleanup.
+                }
+                process.Start();
+                if (windows && !AssignProcessToJobObject(job, process.Handle)) { Stop(process); return result; }
+                process.StandardInput.Close(); // EOF, never borrow the interactive terminal.
+                var stdout = new Capture();
+                var stderr = new Capture();
+                var outputStream = process.StandardOutput;
+                var errorStream = process.StandardError;
+                Task output = Task.Factory.StartNew(() => Drain(outputStream, stdout, outputLimit), TaskCreationOptions.LongRunning);
+                Task error = Task.Factory.StartNew(() => Drain(errorStream, stderr, 4096), TaskCreationOptions.LongRunning);
+                while (clock.ElapsedMilliseconds < milliseconds) {
+                    if (stdout.Overflow != 0 || stderr.Overflow != 0) break;
+                    if (process.HasExited && output.IsCompleted && error.IsCompleted) {
+                        if (process.ExitCode == 0 && stdout.Overflow == 0 && stderr.Overflow == 0) {
+                            lock (stdout.Text) { result.Output = stdout.Text.ToString(); }
+                            result.Success = true;
+                        }
+                        break;
+                    }
+                    Thread.Sleep(1);
+                }
+            } catch {} // Missing, inaccessible or unsupported applications omit their context.
+            finally {
+                if (job != IntPtr.Zero) CloseHandle(job); // Ends the entire Windows job, including detached .cmd children.
+                Stop(process);
+                try { process.WaitForExit(20); } catch {}
+                process.Dispose();
+            }
+            return result;
+        }
+    }
+}
+'@
+}
+$script:probeClock = $null
+
+function Invoke-BacumiProbe([string] $Executable, [string[]] $Arguments, [string] $Directory, [int] $OutputLimit = 4096) {
+    $remaining = 180
+    if ($null -ne $script:probeClock) { $remaining -= [int]$script:probeClock.ElapsedMilliseconds }
+    return [BacumiPrompt.NativeProbe]::Run($Executable, $Arguments, $Directory, [Math]::Max(0, $remaining), $OutputLimit)
+}
+
 function ConvertTo-BacumiText([string] $Text) {
     # Remove terminal controls and bidirectional formatting before rendering data.
     return [regex]::Replace($Text, '[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]', '')
@@ -45,7 +208,7 @@ function Limit-BacumiText([string] $Text, [int] $Width) {
 
 function ConvertFrom-BacumiGitStatus([string] $Text) {
     if (-not $Text -or $Text -notmatch '# branch\.') { return $null }
-    $state = [ordered]@{ branch = ''; unborn = $false; detached = $false; staged = 0; unstaged = 0; untracked = 0; conflicts = 0; ahead = $null; behind = $null; operation = '' }
+    $state = [ordered]@{ branch = ''; unborn = $false; detached = $false; staged = 0; unstaged = 0; untracked = 0; conflicts = 0; ahead = $null; behind = $null; operation = ''; unavailable = $false }
     $oid = ''; $skipRenamePath = $false
     # Native porcelain v2 -z protects newlines in filenames. Fixtures also accept lines.
     $records = if ($Text.Contains([string][char]0)) { $Text.Split([char]0) } else { $Text -split "`n" }
@@ -88,18 +251,48 @@ function Get-BacumiGitDirectory([string] $Directory) {
     return $null
 }
 
+function Get-BacumiGitHead([string] $GitDirectory) {
+    # Read only a small HEAD record. Never parse truncated data as a branch or commit.
+    $stream = $null; $reader = $null
+    try {
+        $headPath = [IO.Path]::Combine($GitDirectory, 'HEAD')
+        if (-not [IO.File]::Exists($headPath)) { return $null }
+        $stream = [IO.File]::Open($headPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true, 512)
+        $buffer = New-Object char[] 512
+        $count = $reader.Read($buffer, 0, $buffer.Length)
+        if ($count -eq 0 -or $count -eq $buffer.Length) { return $null }
+        $head = [string]::new($buffer, 0, $count)
+        $branch = ''; $detached = $false
+        if ($head -match '^ref: refs/heads/([^\r\n]+)(?:\r?\n)?$') { $branch = $Matches[1] }
+        elseif ($head -match '^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})(?:\r?\n)?$') { $branch = $head.Substring(0, 7); $detached = $true }
+        else { return $null }
+        return [pscustomobject][ordered]@{
+            branch = (ConvertTo-BacumiText $branch); unborn = $false; detached = $detached
+            staged = 0; unstaged = 0; untracked = 0; conflicts = 0
+            ahead = $null; behind = $null; operation = ''; unavailable = $true
+        }
+    } catch { return $null }
+    finally {
+        if ($null -ne $reader) { $reader.Dispose() }
+        elseif ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
 function Get-BacumiGit([string] $Directory) {
     if ($script:settings.GitMode -eq 'Off') { return $null }
     $gitDirectory = Get-BacumiGitDirectory $Directory
     if (-not $gitDirectory) { return $null }
     $git = Get-Command git -CommandType Application -ErrorAction Ignore | Select-Object -First 1
-    if (-not $git) { return $null }
-    $arguments = @('--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z')
-    if ($script:settings.GitMode -eq 'Fast') { $arguments += @('--untracked-files=no', '--ignore-submodules=all') }
-    else { $arguments += '--untracked-files=normal' }
-    $raw = & $git.Source @arguments 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
-    $state = ConvertFrom-BacumiGitStatus ($raw -join "`n")
+    $state = $null
+    if ($git) {
+        $arguments = @('--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z')
+        if ($script:settings.GitMode -eq 'Fast') { $arguments += @('--untracked-files=no', '--ignore-submodules=all') }
+        else { $arguments += '--untracked-files=normal' }
+        $probe = Invoke-BacumiProbe $git.Source $arguments $Directory 65536
+        if ($probe.Success) { $state = ConvertFrom-BacumiGitStatus $probe.Output }
+    }
+    if ($null -eq $state) { $state = Get-BacumiGitHead $gitDirectory }
     if ($null -eq $state) { return $null }
     if ((Test-Path -LiteralPath (Join-Path $gitDirectory 'rebase-merge')) -or (Test-Path -LiteralPath (Join-Path $gitDirectory 'rebase-apply'))) { $state.operation = 'rebase' }
     elseif (Test-Path -LiteralPath (Join-Path $gitDirectory 'MERGE_HEAD')) { $state.operation = 'merge' }
@@ -141,11 +334,12 @@ function Get-BacumiRuntimes([string] $Directory) {
         if (-not $command) { continue }
         $key = $definition.label + '|' + $Directory + '|' + $project + '|' + $fingerprint + '|' + $command.Source + '|' + $env:PATH + '|' + $env:VIRTUAL_ENV + '|' + $env:CONDA_DEFAULT_ENV + '|' + $env:PYENV_VERSION + '|' + $env:NVM_BIN
         $cached = $script:runtimeCache[$definition.label]
-        if (-not $cached -or $cached.key -ne $key -or ([datetime]::UtcNow - $cached.time).TotalSeconds -ge $script:settings.CacheSeconds) {
+        $cacheSeconds = if ($cached -and $cached.version) { $script:settings.CacheSeconds } else { [Math]::Min(2, $script:settings.CacheSeconds) }
+        if (-not $cached -or $cached.key -ne $key -or ([datetime]::UtcNow - $cached.time).TotalSeconds -ge $cacheSeconds) {
             # Application only: aliases/functions and project scripts are never invoked.
-            $versionOutput = & $command.Source @($definition.args) 2>$null
+            $probe = Invoke-BacumiProbe $command.Source @($definition.args) $Directory
             $version = ''
-            if ($LASTEXITCODE -eq 0 -and (($versionOutput -join ' ') -match '(\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.-]+)?)')) { $version = $Matches[1] }
+            if ($probe.Success -and ($probe.Output -match '(\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.-]+)?)')) { $version = $Matches[1] }
             $cached = @{ key = $key; time = [datetime]::UtcNow; version = $version }
             $script:runtimeCache[$definition.label] = $cached
         }
@@ -163,53 +357,87 @@ function Format-BacumiPrompt {
     $path = ConvertTo-BacumiText $Directory
     $homePath = [Environment]::GetFolderPath('UserProfile')
     if ($homePath -and ($path -eq $homePath -or $path.StartsWith($homePath + [IO.Path]::DirectorySeparatorChar))) { $path = '~' + $path.Substring($homePath.Length) }
-    $critical = @()
+    if (-not $path) { $path = '.' }
+    $failure = if ($Success) { '' } elseif ($NativeExit -ne 0) { '!' + $NativeExit } else { '!1' }
+    $marker = if ($script:settings.Icons) { [string][char]0x276f } else { '>' }
+    # Every badge has one cell of padding on either side, with one empty cell
+    # between badges. Measure the unstyled output so escapes cannot affect fitting.
+    $inputText = if ($failure) { ' ' + $failure + '  ' + $marker + ' ' } else { $marker + ' ' }
+    $inputReserve = if ($script:settings.Layout -eq 'Compact') { (Get-BacumiWidth $inputText) + 1 } else { 0 }
+    $contentWidth = $Width - $inputReserve
+    $branchPrefix = ''; $branch = ''; $gitSuffix = ''; $gitText = ''; $unknownGit = $false
     if ($null -ne $Git) {
         $branchPrefix = if ($Git.detached) { 'git:@' } else { 'git:' }
-        $branchLabel = $branchPrefix + (Limit-BacumiText (ConvertTo-BacumiText $Git.branch) $(if ($Width -lt 60) { 12 } else { 28 }))
-        $critical += $branchLabel
-        if ($Git.conflicts -gt 0) { $critical += 'conflict:' + $Git.conflicts }
-        if ($Git.operation) { $critical += $Git.operation }
+        $branch = ConvertTo-BacumiText $Git.branch
+        if (-not $branch) { $branch = '?' }
+        if ($Git.conflicts -gt 0) { $gitSuffix = ' conflict:' + $Git.conflicts }
+        $unknownGit = $null -ne $Git.PSObject.Properties['unavailable'] -and [bool]$Git.unavailable
+        if ($unknownGit) { $gitSuffix += ' status:?' }
     }
-    $failure = if ($Success) { '' } elseif ($NativeExit -ne 0) { '!' + $NativeExit } else { '!1' }
-    $marker = if ($script:settings.Icons) { [char]0x276f } else { '>' }
-    $inputLine = if ($failure) { $failure + ' ' + $marker + ' ' } else { [string]$marker + ' ' }
-    if ($critical.Count) {
-        $otherWidth = if ($critical.Count -gt 1) { (Get-BacumiWidth ($critical[1..($critical.Count - 1)] -join ' ')) + 1 } else { 0 }
-        $inputWidth = if ($script:settings.Layout -eq 'Compact') { (Get-BacumiWidth $inputLine) + 1 } else { 0 }
-        $branchBudget = [Math]::Max(1, $Width - $otherWidth - $inputWidth - $branchPrefix.Length - 7)
-        $critical[0] = $branchPrefix + (Limit-BacumiText (ConvertTo-BacumiText $Git.branch) ([Math]::Min($branchBudget, $(if ($Width -lt 60) { 12 } else { 28 }))))
-    }
-    $reserved = if ($critical.Count) { (Get-BacumiWidth ($critical -join ' ')) + 2 } else { 0 }
-    if ($script:settings.Layout -eq 'Compact') { $reserved += (Get-BacumiWidth $inputLine) + 1 }
-    $pathBudget = [Math]::Max(1, $Width - $reserved)
-    if ((Get-BacumiWidth $path) -gt $pathBudget) {
-        $leaf = Split-Path $path -Leaf
-        if ($leaf) { $path = '.../' + $leaf }
-        $path = Limit-BacumiText $path $pathBudget
-    }
-    $first = $path
-    if ($critical.Count) { $first += '  ' + ($critical -join ' ') }
-    $gitEnd = $first.Length
-    $optional = @()
-    if ($null -ne $Git) {
-        if ($script:settings.GitMode -eq 'Full') {
-            if ($Git.staged) { $optional += '+' + $Git.staged }
-            if ($Git.unstaged) { $optional += '~' + $Git.unstaged }
-            if ($Git.untracked) { $optional += '?' + $Git.untracked }
+    $fixedWidth = 2
+    if ($null -ne $Git) { $fixedWidth += 3 + (Get-BacumiWidth ($branchPrefix + $gitSuffix)) }
+    $textBudget = [Math]::Max(1, $contentWidth - $fixedWidth)
+    if ($null -ne $Git -and (Get-BacumiWidth ($path + $branch)) -gt $textBudget) {
+        # Keep both location and branch identifiable before admitting optional data.
+        $pathBudget = [Math]::Max(1, [int][Math]::Floor($textBudget / 2))
+        $branchBudget = [Math]::Max(1, $textBudget - $pathBudget)
+        if ((Get-BacumiWidth $branch) -lt $branchBudget) { $pathBudget += $branchBudget - (Get-BacumiWidth $branch) }
+        if ((Get-BacumiWidth $path) -lt $pathBudget) { $branchBudget += $pathBudget - (Get-BacumiWidth $path) }
+        if ((Get-BacumiWidth $path) -gt $pathBudget) {
+            $leaf = ($path -split '[/\\]')[-1]
+            if ($leaf -and $pathBudget -ge 7) { $path = '.../' + $leaf }
+            $path = Limit-BacumiText $path $pathBudget
         }
-        if ($null -ne $Git.ahead -and $Git.ahead -gt 0) { $optional += 'ahead:' + $Git.ahead }
-        if ($null -ne $Git.behind -and $Git.behind -gt 0) { $optional += 'behind:' + $Git.behind }
+        $branch = Limit-BacumiText $branch $branchBudget
+    } elseif ($null -eq $Git) { $path = Limit-BacumiText $path $textBudget }
+    $firstWidth = (Get-BacumiWidth $path) + 2
+    if ($null -ne $Git) {
+        $gitText = $branchPrefix + $branch + $gitSuffix
+        $firstWidth += (Get-BacumiWidth $gitText) + 3
+        $gitOptional = @()
+        if ($Git.operation) { $gitOptional += ConvertTo-BacumiText $Git.operation }
+        if (-not $unknownGit -and $script:settings.GitMode -eq 'Full') {
+            if ($Git.staged) { $gitOptional += '+' + $Git.staged }
+            if ($Git.unstaged) { $gitOptional += '~' + $Git.unstaged }
+            if ($Git.untracked) { $gitOptional += '?' + $Git.untracked }
+        }
+        if (-not $unknownGit -and $null -ne $Git.ahead -and $Git.ahead -gt 0) { $gitOptional += 'ahead:' + $Git.ahead }
+        if (-not $unknownGit -and $null -ne $Git.behind -and $Git.behind -gt 0) { $gitOptional += 'behind:' + $Git.behind }
+        foreach ($item in $gitOptional) {
+            $extra = (Get-BacumiWidth $item) + 1
+            if ($item -and $firstWidth + $extra -le $contentWidth) { $gitText += ' ' + $item; $firstWidth += $extra }
+        }
     }
-    $gitOptionCount = $optional.Count
-    $optional += $Context
+    # On normal-width terminals, a shorter location can make room for the
+    # first relevant runtime without losing Git counts or any critical state.
+    if ($Width -ge 80) {
+        foreach ($item in $Context) {
+            $runtimeText = ConvertTo-BacumiText $item
+            if (-not $runtimeText) { continue }
+            $needed = $firstWidth + (Get-BacumiWidth $runtimeText) + 3 - $contentWidth
+            if ($needed -le 0) { break }
+            $pathBudget = (Get-BacumiWidth $path) - $needed
+            if ($pathBudget -ge 7) {
+                $oldPathWidth = Get-BacumiWidth $path
+                $leaf = ($path -split '[/\\]')[-1]
+                if ($leaf) { $path = '.../' + $leaf }
+                $path = Limit-BacumiText $path $pathBudget
+                $firstWidth -= $oldPathWidth - (Get-BacumiWidth $path)
+                break
+            }
+        }
+    }
+    $badges = @(@{ role = 'directory'; text = $path })
+    if ($gitText) { $badges += @{ role = $(if ($Git.conflicts -gt 0 -or $unknownGit) { 'error' } else { 'git' }); text = $gitText } }
+    $optional = @($Context)
     if ($Duration -ge 2) { $optional += $Duration.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + 's' }
-    $optionIndex = 0
     foreach ($item in $optional) {
-        $candidate = $first + '  ' + (ConvertTo-BacumiText $item)
-        $extra = if ($script:settings.Layout -eq 'Compact') { (Get-BacumiWidth $inputLine) + 1 } else { 0 }
-        if ((Get-BacumiWidth $candidate) + $extra -le $Width) { $first = $candidate; if ($optionIndex -lt $gitOptionCount) { $gitEnd = $first.Length } }
-        $optionIndex++
+        $text = ConvertTo-BacumiText $item
+        $extra = (Get-BacumiWidth $text) + 3
+        # A long context does not prevent later, shorter contexts from appearing.
+        if ($text -and $firstWidth + $extra -le $contentWidth) {
+            $badges += @{ role = 'context'; text = $text }; $firstWidth += $extra
+        }
     }
     $mode = $script:settings.ColorMode
     if ($mode -eq 'Auto') {
@@ -222,36 +450,31 @@ function Format-BacumiPrompt {
             }
         }
     }
-    if ($env:NO_COLOR) { $mode = 'Plain' }
-    if ($mode -ne 'Plain') {
-        $escape = [string][char]27
-        $bad = -not $Success -or ($null -ne $Git -and $Git.conflicts -gt 0)
-        $reset = $escape + '[0m'
-        if ($mode -eq 'TrueColor') {
-            $colors = if ($script:settings.Appearance -eq 'Light') {
-                @{ directory = '47;96;132'; git = '66;101;60'; muted = '86;95;107'; error = '180;35;24'; accent = '163;65;0' }
-            } else {
-                @{ directory = '147;182;214'; git = '173;196;161'; muted = '160;167;178'; error = '255;138;128'; accent = '255;179;71' }
-            }
-            $directoryColor = $escape + '[38;2;' + $colors.directory + 'm'
-            $gitColor = $escape + '[38;2;' + $(if ($null -ne $Git -and $Git.conflicts) { $colors.error } else { $colors.git }) + 'm'
-            $contextColor = $escape + '[38;2;' + $colors.muted + 'm'
-            $markerColor = $escape + '[38;2;' + $(if ($bad) { $colors.error } else { $colors.accent }) + 'm'
+    if ($env:NO_COLOR -or $env:TERM -eq 'dumb') { $mode = 'Plain' }
+    $escape = [string][char]27
+    $reset = if ($mode -eq 'Plain') { '' } else { $escape + '[0m' }
+    $styles = @{ directory = ''; git = ''; context = ''; error = ''; marker = '' }
+    if ($mode -eq 'TrueColor') {
+        $colors = if ($script:settings.Appearance -eq 'Light') {
+            @{ directory = @('250;250;248', '163;65;0'); git = @('250;250;248', '66;101;60'); context = @('48;52;60', '221;229;238'); error = @('250;250;248', '180;35;24'); marker = '163;65;0' }
         } else {
-            $directoryColor = $escape + '[34m'
-            $gitColor = $escape + $(if ($null -ne $Git -and $Git.conflicts) { '[31m' } else { '[32m' })
-            $contextColor = $escape + '[90m'
-            $markerColor = $escape + $(if ($bad) { '[31m' } else { '[33m' })
+            @{ directory = @('23;25;31', '255;179;71'); git = @('23;25;31', '173;196;161'); context = @('216;217;221', '50;60;75'); error = @('23;25;31', '255;138;128'); marker = '255;179;71' }
         }
-        $first = $directoryColor + $first.Substring(0, $path.Length) + $reset +
-            $gitColor + $first.Substring($path.Length, $gitEnd - $path.Length) + $reset +
-            $contextColor + $first.Substring($gitEnd) + $reset
-        $inputLine = $markerColor + $inputLine + $reset
+        foreach ($role in @('directory', 'git', 'context', 'error')) { $styles[$role] = $escape + '[38;2;' + $colors[$role][0] + ';48;2;' + $colors[$role][1] + 'm' }
+        $styles.marker = $escape + '[38;2;' + $colors.marker + 'm'
+    } elseif ($mode -eq 'Ansi') {
+        # Inverse uses the terminal's default background as badge text. Bacumi's
+        # ANSI black/white slots are readable text colors, not background colors.
+        $styles = @{ directory = $escape + '[33;49;7m'; git = $escape + '[32;49;7m'; context = $escape + '[90;49;7m'; error = $escape + '[31;49;7m'; marker = $escape + '[33m' }
     }
+    $rendered = @()
+    foreach ($badge in $badges) { $rendered += $styles[$badge.role] + ' ' + $badge.text + ' ' + $reset }
+    $first = $rendered -join ' '
+    $inputLine = $styles.marker + $marker + ' ' + $reset
+    if ($failure) { $inputLine = $styles.error + ' ' + $failure + ' ' + $reset + ' ' + $inputLine }
     if ($script:settings.Layout -eq 'Compact') { return $first + ' ' + $inputLine }
     return $first + [Environment]::NewLine + $inputLine
 }
-
 function Get-BacumiFailureCode([bool] $Success, [int] $NativeExit, $PreviousError, $History) {
     if ($Success) { return 0 }
     # A shell failure can follow an earlier native failure; LASTEXITCODE remains
@@ -281,6 +504,7 @@ function Get-BacumiFailureCode([bool] $Success, [int] $NativeExit, $PreviousErro
 
 function Invoke-BacumiPrompt {
     param([bool] $PreviousSuccess, [int] $PreviousNativeExit, $PreviousError)
+    $script:probeClock = [Diagnostics.Stopwatch]::StartNew()
     try {
         $location = Get-Location
         $directory = $location.Path
@@ -302,6 +526,7 @@ function Invoke-BacumiPrompt {
         Format-BacumiPrompt -Directory $directory -Git $git -Success $PreviousSuccess -NativeExit $failureCode -Context $context -Duration $duration -Width $width
     } catch { '> ' }
     finally {
+        $script:probeClock = $null
         $global:LASTEXITCODE = $PreviousNativeExit
         $script:lastObservedError = if ($global:Error.Count) { $global:Error[0] } else { $null }
     }

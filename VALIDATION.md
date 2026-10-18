@@ -88,3 +88,39 @@ Results are diagnostic, not cross-platform performance promises. Windows CI
 prints separate PowerShell 5.1 and 7 samples. Git checks use one local porcelain
 status query per prompt; `-GitMode Fast` suppresses expensive detailed scanning,
 and `-GitMode Off` skips Git. Runtime version probes have bounded caching.
+
+## 0.3.0 branch review — not released
+
+The original automated suite missed a controlling-terminal bug: Zsh `read -k`
+read from `/dev/tty` despite file redirection. The regression now uses
+`pty.fork()` (not only openpty/Popen), actual installed themes and real Oh My Zsh.
+Small version files, empty/non-newline files, typed commands after `cd`, plugin
+loading, status, resizing, Unicode/multiline input and Ctrl-C are exercised.
+
+Native external probes now share an approximately 180 ms subprocess budget per
+prompt, with EOF input, bounded output, timeout cleanup and short failure caching.
+A Git status failure keeps bounded local HEAD information with explicit `status:?`;
+partial/stale counts are suppressed. The budget does not bound filesystem or OS
+scheduling calls. Deliberately daemonizing executable wrappers are outside the
+ordinary-runtime fixtures; no arbitrary-process containment guarantee is made.
+
+Real renderer fixtures cover Dark/Light, developer/compact, 40/80/120 columns,
+plain/ANSI/truecolor and icons, including conflict/failure/unknown-state priority.
+Developer SVGs now rerender from the actual native formatting code on controlled
+data; they remain distinct from native emulator screenshots. ANSI fallback uses
+readable inverse colors against the terminal's current background. Exact Bacumi
+RGB colors require truecolor support.
+
+Local macOS checks passed for native Zsh and PowerShell 7.6.7, including the
+existing installer/font suites and archive installation. New Windows PowerShell
+5.1/7 and hosted Linux checks are required on the review branch before release.
+Native Apple Terminal/iTerm2/Windows Terminal visual acceptance remains manual.
+No 0.3.0 release is published.
+
+PowerShell uses an in-process .NET helper compiled at module import to drain
+bounded streams and own native processes, without an external prompt engine or
+installed compiler dependency. Windows `.cmd` paths and Job Object cleanup need
+the actual Windows branch checks; Unix ordinary child cleanup was tested on Mac.
+The formatter matrix contains 288 renders; process regressions include slow/hung
+tools, input reads, stdout/stderr limits, failures, literal executable paths,
+shared budget, unavailable-HEAD fallback and failure-cache recovery.

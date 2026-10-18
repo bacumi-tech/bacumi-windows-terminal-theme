@@ -1,6 +1,6 @@
 @{
     RootModule = 'BacumiPrompt.psm1'
-    ModuleVersion = '0.2.0'
+    ModuleVersion = '0.3.0'
     GUID = '2cd76534-ac62-4c7c-96c4-cfc72bd60c78'
     Author = 'Bacumi'
     Copyright = '(c) 2026 Bacumi. MIT License.'
