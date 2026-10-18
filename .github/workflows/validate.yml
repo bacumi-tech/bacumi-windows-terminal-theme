@@ -15,13 +15,15 @@ jobs:
       - run: python3 scripts/package.py
   windows-installer:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Native install and uninstall in temporary directories
-        shell: ${{ matrix.shell }}
+      - name: Windows PowerShell 5.1 install and uninstall
+        shell: powershell
+        run: |
+          $PSVersionTable.PSVersion
+          ./tests/install.Tests.ps1
+      - name: PowerShell 7 install and uninstall
+        shell: pwsh
         run: |
           $PSVersionTable.PSVersion
           ./tests/install.Tests.ps1
