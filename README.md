@@ -153,7 +153,16 @@ initialization while trying Bacumi.
 | `ahead:2 behind:1` | Commits against the locally known upstream |
 | `merge` / `rebase` | Operation in progress |
 | `node:22…` | Active runtime version in a relevant project |
-| `!1` | Previous command failed with status 1 |
+| `!1 command failed` | Previous command failed; its exit code is preserved |
+| `!1 command not found` | PowerShell reported a new command-not-found error |
+
+Failure badges include a short summary and clear after a successful command.
+Native programs use `command failed` with their original exit code; numeric
+codes have different meanings across Windows applications. A new PowerShell
+command-not-found error uses `command not found`. The full error stays in the
+command's original output; the theme does not capture or repeat it. Compact
+layouts use a second line when the summary and essential Git state cannot fit
+together. Extremely narrow windows shorten the summary.
 | `3.2s` | Previous command took at least two seconds |
 
 Git counts describe file records, not changed lines. The prompt never fetches

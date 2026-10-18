@@ -18,6 +18,28 @@ function Render($Case, [int]$Width) {
 }
 try {
     $env:TERM = 'xterm-256color'; $env:NO_COLOR = $null
+    foreach ($appearance in @('Dark', 'Light')) {
+        foreach ($layout in @('Developer', 'Compact')) {
+            Enable-BacumiPrompt -Appearance $appearance -Layout $layout -ColorMode Plain
+            foreach ($width in @(40, 80)) {
+                foreach ($code in @(1, 7, 126, 127, 130, 143, 255)) {
+                    $case = $fixtures[1] | Select-Object *
+                    $case.exit = $code
+                    $text = Render $case $width
+                    Assert ($text.Contains("!$code command failed")) 'Native codes must have a readable, generic summary'
+                    Assert ($text.Contains('conflict:1')) 'Readable failure must retain conflicts'
+                    foreach ($line in ($text -split "`n")) {
+                        $columns = & $module { param($t) Get-BacumiWidth $t } $line.TrimEnd("`r")
+                        Assert ($columns -le $width) "Readable failure overflows $width columns: $text"
+                    }
+                }
+                Assert (-not (Render $fixtures[0] $width).Contains('command failed')) 'Successful commands must clear the summary'
+            }
+        }
+    }
+    $narrow = & $module { Format-BacumiPrompt -Directory '/project' -Success $false -NativeExit 127 -Width 16 }
+    Assert ($narrow.Contains('!127') -and $narrow.Contains('...')) 'Very narrow summaries must retain the exit code'
+    foreach ($line in ($narrow -split "`n")) { Assert ($line.TrimEnd("`r").Length -le 16) 'Very narrow failure overflows' }
     $captures = @()
     foreach ($appearance in @('Dark', 'Light')) {
         foreach ($layout in @('Developer', 'Compact')) {

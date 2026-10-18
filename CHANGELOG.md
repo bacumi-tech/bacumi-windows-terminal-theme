@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add readable failure summaries beside native exit codes and identify new
+  PowerShell command-not-found errors in Dark/Light.
+- Let compact failure prompts use two lines when needed to retain Git state and
+  the explanation; preserve exit status and clear the summary after success.
+
 ## 0.3.0 — 2026-10-18 (preview)
 
 - Add original Bacumi padded segments in Dark/Light with readable ANSI fallback.

@@ -40,6 +40,7 @@ try {
     $failureText = prompt
     $failureState = $?
     Assert ($failureText -match '!1(?: |$)') 'Shell failure must ignore stale nonzero native exit status'
+    Assert ($failureText.Contains('!1 command failed')) 'Shell failure needs a readable summary'
     Assert ($global:LASTEXITCODE -eq 37) 'Shell failure prompt must preserve stale native exit code'
     Assert (-not $failureState) 'Prompt must preserve the previous failure state'
     $engine = (Get-Process -Id $PID).Path
@@ -47,6 +48,7 @@ try {
     $nativeText = prompt
     $nativeState = $?
     Assert ($nativeText -match '!7' -and -not $nativeState) 'Native failure must retain its exit code and failure state'
+    Assert ($nativeText.Contains('!7 command failed')) 'Native failure needs a readable summary'
     Assert ($global:LASTEXITCODE -eq 7) 'Prompt probes changed a native failure code'
     & $engine -NoLogo -NoProfile -Command 'exit 7'
     $nativeText = prompt
@@ -61,6 +63,20 @@ try {
     Write-Error 'Expected shell failure' -ErrorAction SilentlyContinue
     $failureText = prompt
     Assert ($failureText -match '!1') 'Shell failure with zero native exit must show !1'
+    Disable-BacumiPrompt
+
+    Enable-BacumiPrompt -ColorMode Plain -GitMode Off
+    try { & 'bacumi_nonexistent_command_fixture' } catch { $missingRecord = $_ }
+    $missingText = & $module {
+        param($record)
+        Invoke-BacumiPrompt -PreviousSuccess $false -PreviousNativeExit 37 -PreviousError $record
+    } $missingRecord
+    Assert ($missingText.Contains('!1 command not found')) 'New command-not-found errors need a specific summary'
+    Assert ($global:LASTEXITCODE -eq 37) 'Readable shell errors must preserve native status'
+    Assert (-not (prompt).Contains('command not found')) 'Successful commands must clear the previous error summary'
+    & $engine -NoLogo -NoProfile -Command 'exit 127'
+    $laterNativeText = prompt
+    Assert ($laterNativeText.Contains('!127 command failed')) 'A stale command-not-found error must not label a later native failure'
     Disable-BacumiPrompt
 
     $state = & $module { ConvertFrom-BacumiGitStatus "# branch.oid abcdef1234567890`n# branch.head feature/very-long-name`nu UU N... conflict`n" }

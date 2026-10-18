@@ -352,19 +352,20 @@ function Get-BacumiRuntimes([string] $Directory) {
 
 function Format-BacumiPrompt {
     param([string] $Directory, $Git, [bool] $Success = $true, [int] $NativeExit = 0, [int] $Width = 80,
-        [string[]] $Context = @(), [double] $Duration = 0)
+        [string[]] $Context = @(), [double] $Duration = 0,
+        [ValidateSet('command failed', 'command not found')][string] $FailureLabel = 'command failed')
     $Width = [Math]::Max(16, $Width)
     $path = ConvertTo-BacumiText $Directory
     $homePath = [Environment]::GetFolderPath('UserProfile')
     if ($homePath -and ($path -eq $homePath -or $path.StartsWith($homePath + [IO.Path]::DirectorySeparatorChar))) { $path = '~' + $path.Substring($homePath.Length) }
     if (-not $path) { $path = '.' }
     $failure = if ($Success) { '' } elseif ($NativeExit -ne 0) { '!' + $NativeExit } else { '!1' }
+    if ($failure) { $failure = Limit-BacumiText ($failure + ' ' + $FailureLabel) ($Width - 6) }
+    $layout = $script:settings.Layout
     $marker = if ($script:settings.Icons) { [string][char]0x276f } else { '>' }
     # Every badge has one cell of padding on either side, with one empty cell
     # between badges. Measure the unstyled output so escapes cannot affect fitting.
     $inputText = if ($failure) { ' ' + $failure + '  ' + $marker + ' ' } else { $marker + ' ' }
-    $inputReserve = if ($script:settings.Layout -eq 'Compact') { (Get-BacumiWidth $inputText) + 1 } else { 0 }
-    $contentWidth = $Width - $inputReserve
     $branchPrefix = ''; $branch = ''; $gitSuffix = ''; $gitText = ''; $unknownGit = $false
     if ($null -ne $Git) {
         $branchPrefix = if ($Git.detached) { 'git:@' } else { 'git:' }
@@ -374,6 +375,12 @@ function Format-BacumiPrompt {
         $unknownGit = $null -ne $Git.PSObject.Properties['unavailable'] -and [bool]$Git.unavailable
         if ($unknownGit) { $gitSuffix += ' status:?' }
     }
+    $minimumFirst = 3
+    if ($null -ne $Git) { $minimumFirst += 4 + (Get-BacumiWidth ($branchPrefix + $gitSuffix)) }
+    # Let compact failures wrap before sacrificing their explanation or Git state.
+    if ($failure -and $minimumFirst + (Get-BacumiWidth $inputText) + 1 -gt $Width) { $layout = 'Developer' }
+    $inputReserve = if ($layout -eq 'Compact') { (Get-BacumiWidth $inputText) + 1 } else { 0 }
+    $contentWidth = $Width - $inputReserve
     $fixedWidth = 2
     if ($null -ne $Git) { $fixedWidth += 3 + (Get-BacumiWidth ($branchPrefix + $gitSuffix)) }
     $textBudget = [Math]::Max(1, $contentWidth - $fixedWidth)
@@ -472,7 +479,7 @@ function Format-BacumiPrompt {
     $first = $rendered -join ' '
     $inputLine = $styles.marker + $marker + ' ' + $reset
     if ($failure) { $inputLine = $styles.error + ' ' + $failure + ' ' + $reset + ' ' + $inputLine }
-    if ($script:settings.Layout -eq 'Compact') { return $first + ' ' + $inputLine }
+    if ($layout -eq 'Compact') { return $first + ' ' + $inputLine }
     return $first + [Environment]::NewLine + $inputLine
 }
 function Get-BacumiFailureCode([bool] $Success, [int] $NativeExit, $PreviousError, $History) {
@@ -523,7 +530,11 @@ function Invoke-BacumiPrompt {
         $width = 80
         try { if ($Host.UI.RawUI.WindowSize.Width -gt 0) { $width = $Host.UI.RawUI.WindowSize.Width } } catch { }
         $failureCode = Get-BacumiFailureCode $PreviousSuccess $PreviousNativeExit $PreviousError $history
-        Format-BacumiPrompt -Directory $directory -Git $git -Success $PreviousSuccess -NativeExit $failureCode -Context $context -Duration $duration -Width $width
+        $failureLabel = 'command failed'
+        if (-not $PreviousSuccess -and $PreviousError -and
+            -not [object]::ReferenceEquals($PreviousError, $script:lastObservedError) -and
+            $PreviousError.Exception -is [Management.Automation.CommandNotFoundException]) { $failureLabel = 'command not found' }
+        Format-BacumiPrompt -Directory $directory -Git $git -Success $PreviousSuccess -NativeExit $failureCode -Context $context -Duration $duration -Width $width -FailureLabel $failureLabel
     } catch { '> ' }
     finally {
         $script:probeClock = $null
