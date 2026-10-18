@@ -1,0 +1,63 @@
+{
+  "revision": "bacumi-terminal-1",
+  "variants": {
+    "dark": {
+      "background": "#17191F",
+      "foreground": "#D8D9DD",
+      "cursor": "#FFB347",
+      "selection": "#323C4B",
+      "accent": "#FFB347",
+      "directory": "#93B6D6",
+      "git": "#ADC4A1",
+      "error": "#FF8A80",
+      "muted": "#A0A7B2",
+      "ansi": {
+        "black": "#A0A7B2",
+        "red": "#EFA09A",
+        "green": "#ADC4A1",
+        "yellow": "#E5CA95",
+        "blue": "#93B6D6",
+        "magenta": "#C8AFD6",
+        "cyan": "#94C4C1",
+        "white": "#D8D9DD",
+        "brightBlack": "#B0B7C2",
+        "brightRed": "#FFB3AC",
+        "brightGreen": "#C0D9B3",
+        "brightYellow": "#F5DDA9",
+        "brightBlue": "#A9CEED",
+        "brightMagenta": "#DBC2E9",
+        "brightCyan": "#ADDCD7",
+        "brightWhite": "#FAFAF8"
+      }
+    },
+    "light": {
+      "background": "#FAFAF8",
+      "foreground": "#30343C",
+      "cursor": "#A34100",
+      "selection": "#DDE5EE",
+      "accent": "#A34100",
+      "directory": "#2F6084",
+      "git": "#42653C",
+      "error": "#B42318",
+      "muted": "#565F6B",
+      "ansi": {
+        "black": "#30343C",
+        "red": "#A13C35",
+        "green": "#42653C",
+        "yellow": "#785324",
+        "blue": "#2F6084",
+        "magenta": "#73508A",
+        "cyan": "#276969",
+        "white": "#565F6B",
+        "brightBlack": "#66707C",
+        "brightRed": "#9D3029",
+        "brightGreen": "#356030",
+        "brightYellow": "#714D17",
+        "brightBlue": "#24577B",
+        "brightMagenta": "#694280",
+        "brightCyan": "#1A6060",
+        "brightWhite": "#30343C"
+      }
+    }
+  }
+}

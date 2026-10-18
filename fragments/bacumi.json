@@ -1,0 +1,50 @@
+{
+  "schemes": [
+    {
+      "name": "Bacumi Dark",
+      "foreground": "#D8D9DD",
+      "background": "#17191F",
+      "cursorColor": "#FFB347",
+      "selectionBackground": "#323C4B",
+      "black": "#A0A7B2",
+      "red": "#EFA09A",
+      "green": "#ADC4A1",
+      "yellow": "#E5CA95",
+      "blue": "#93B6D6",
+      "purple": "#C8AFD6",
+      "cyan": "#94C4C1",
+      "white": "#D8D9DD",
+      "brightBlack": "#B0B7C2",
+      "brightRed": "#FFB3AC",
+      "brightGreen": "#C0D9B3",
+      "brightYellow": "#F5DDA9",
+      "brightBlue": "#A9CEED",
+      "brightPurple": "#DBC2E9",
+      "brightCyan": "#ADDCD7",
+      "brightWhite": "#FAFAF8"
+    },
+    {
+      "name": "Bacumi Light",
+      "foreground": "#30343C",
+      "background": "#FAFAF8",
+      "cursorColor": "#A34100",
+      "selectionBackground": "#DDE5EE",
+      "black": "#30343C",
+      "red": "#A13C35",
+      "green": "#42653C",
+      "yellow": "#785324",
+      "blue": "#2F6084",
+      "purple": "#73508A",
+      "cyan": "#276969",
+      "white": "#565F6B",
+      "brightBlack": "#66707C",
+      "brightRed": "#9D3029",
+      "brightGreen": "#356030",
+      "brightYellow": "#714D17",
+      "brightBlue": "#24577B",
+      "brightPurple": "#694280",
+      "brightCyan": "#1A6060",
+      "brightWhite": "#30343C"
+    }
+  ]
+}
