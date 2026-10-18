@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 — 2026-10-18 (preview)
 
 - Add readable failure summaries beside native exit codes and identify new
   PowerShell command-not-found errors in Dark/Light.

@@ -6,15 +6,15 @@
   <h1>Bacumi for Windows Terminal</h1>
   <p>Bacumi colors and a native developer prompt, in Dark and Light.</p>
   <p>
-    <a href="https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.0">Download 0.3.0 preview</a> ·
+    <a href="https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.2">Download 0.3.2 preview</a> ·
     <a href="#installation">Installation</a> ·
     <a href="BRAND.md">Brand and icons</a> ·
     <a href="LICENSE">MIT license</a>
   </p>
 </div>
 
-**0.3.0 preview.** Includes the original Bacumi segmented design and interactive
-prompt safety fixes. Download the ZIP below or install from the Git checkout.
+**0.3.2 preview.** Adds readable error summaries to the Bacumi Dark/Light
+developer prompts. Download the ZIP below or install from the Git checkout.
 
 Bacumi Dark pairs a Graphite background with warm accents. Bacumi Light brings
 the same color roles to an Off-White workspace. Both include a complete ANSI
@@ -67,13 +67,13 @@ Installation is per user and requires no administrator access, Git or package ma
 
 ### 1. Download and extract
 
-Download [bacumi-windows-terminal-theme-0.3.0.zip](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/download/v0.3.0/bacumi-windows-terminal-theme-0.3.0.zip)
-from the [GitHub release](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.0).
+Download [bacumi-windows-terminal-theme-0.3.2.zip](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/download/v0.3.2/bacumi-windows-terminal-theme-0.3.2.zip)
+from the [GitHub release](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.2).
 The release also includes `SHA256SUMS`. From your download folder, calculate
 the ZIP's SHA-256 and compare it with the entry in that checksum file:
 
 ```powershell
-Get-FileHash .\bacumi-windows-terminal-theme-0.3.0.zip -Algorithm SHA256
+Get-FileHash .\bacumi-windows-terminal-theme-0.3.2.zip -Algorithm SHA256
 ```
 
 Extract the ZIP and open PowerShell in the extracted folder containing `Install.ps1`.
