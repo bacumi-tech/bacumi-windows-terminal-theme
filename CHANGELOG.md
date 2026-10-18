@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — unreleased interactive-safety and Bacumi segment design
+## 0.3.0 — 2026-10-18 (preview)
 
 - Add original Bacumi padded segments in Dark/Light with readable ANSI fallback.
 - Bound native Git/runtime probes, close their input, cap output and clean up
@@ -8,7 +8,7 @@
   status is unavailable; omit incomplete counts. Retry failed runtime probes soon.
 - Add controlling-terminal and adversarial-process regressions, 40/80/120-column
   fixture matrices and previews captured from the actual native renderer.
-- Hold release publication pending native visual review.
+- Publish as a preview while native terminal visual/font acceptance remains pending.
 
 ## 0.2.0 — native developer prompt preview
 

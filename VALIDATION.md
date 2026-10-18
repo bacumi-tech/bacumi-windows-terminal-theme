@@ -89,7 +89,7 @@ prints separate PowerShell 5.1 and 7 samples. Git checks use one local porcelain
 status query per prompt; `-GitMode Fast` suppresses expensive detailed scanning,
 and `-GitMode Off` skips Git. Runtime version probes have bounded caching.
 
-## 0.3.0 branch review — not released
+## 0.3.0 preview — 2026-10-18
 
 The original automated suite missed a controlling-terminal bug: Zsh `read -k`
 read from `/dev/tty` despite file redirection. The regression now uses
@@ -112,15 +112,19 @@ readable inverse colors against the terminal's current background. Exact Bacumi
 RGB colors require truecolor support.
 
 Local macOS checks passed for native Zsh and PowerShell 7.6.7, including the
-existing installer/font suites and archive installation. New Windows PowerShell
-5.1/7 and hosted Linux checks are required on the review branch before release.
+existing installer/font suites and archive installation. Hosted macOS/Linux and
+Windows PowerShell 5.1/7 checks also passed:
+
+- [Zsh macOS/Linux validation](https://github.com/bacumi-tech/bacumi-oh-my-zsh-theme/actions/runs/39140787999)
+- [Windows PowerShell 5.1/7 validation](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/actions/runs/39140424302)
+
 Native Apple Terminal/iTerm2/Windows Terminal visual acceptance remains manual.
-No 0.3.0 release is published.
+Version 0.3.0 remains a preview pending that acceptance.
 
 PowerShell uses an in-process .NET helper compiled at module import to drain
 bounded streams and own native processes, without an external prompt engine or
-installed compiler dependency. Windows `.cmd` paths and Job Object cleanup need
-the actual Windows branch checks; Unix ordinary child cleanup was tested on Mac.
+installed compiler dependency. Windows `.cmd` paths and Job Object cleanup passed
+the actual Windows checks; Unix ordinary child cleanup was tested on Mac.
 The formatter matrix contains 288 renders; process regressions include slow/hung
 tools, input reads, stdout/stderr limits, failures, literal executable paths,
 shared budget, unavailable-HEAD fallback and failure-cache recovery.
