@@ -1,5 +1,7 @@
 # Bacumi for Windows Terminal
 
+![Bacumi Windows Terminal Dark icon](assets/icons/icon-dark-128.png) ![Bacumi Light icon](assets/icons/icon-light-128.png)
+
 Two warm, readable color schemes: **Bacumi Dark** and **Bacumi Light**.
 Graphite and Off-White backgrounds, Amber focus, sage greens and quiet blues.
 Free and open source under the [MIT License](LICENSE).
@@ -12,7 +14,7 @@ The schemes change colors only; fonts, keybindings and profile commands stay you
 
 ## Install from GitHub Releases
 
-1. Download `bacumi-windows-terminal-theme-0.1.0.zip` from
+1. Download `bacumi-windows-terminal-theme-0.1.1.zip` from
    [Releases](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases).
 2. Extract the ZIP. Open PowerShell in the extracted directory and run:
 
@@ -93,7 +95,29 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Report issues with your Terminal version
 scheme and a non-sensitive example. The MIT license covers this repository's
 theme definitions, palette, code, documentation and illustrations. Bacumi names
 identify this project; the license does not grant trademark rights or imply
-endorsement of forks. No proprietary logos or fonts are bundled.
+endorsement of forks. Original product icons are MIT licensed; company logo masters and fonts are not bundled.
 
 Implementation follows Microsoft's [color-scheme documentation](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/color-schemes)
 and [JSON fragment extension documentation](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions).
+
+## Bacumi brand and product icons
+
+The palette was checked against Bacumi Brand v1.0 and its approved editor
+adaptation: Graphite-derived Dark, Off-White Light, warm focus accents and
+contrast-adjusted semantic colors. Both terminal-theme projects use the same
+palette revision. [BRAND.md](BRAND.md) records the role mapping and icon rationale.
+
+`assets/icons/` contains original Dark/Light SVG masters and transparent PNG
+exports at 16, 32, 128, 256, 512 and 1024 px. These are product identifiers;
+selecting the theme does not replace your terminal application's icon.
+
+Contributor checks (Python standard library only):
+
+```sh
+python3 scripts/build-icons.py --check
+python3 scripts/check-brand.py
+```
+
+After artwork edits, regenerate SVGs with `python3 scripts/build-icons.py`.
+Refreshing PNGs uses `python3 scripts/export-icons.py`, with optional PyMuPDF
+available in the contributor's environment. It is never needed by users or CI.

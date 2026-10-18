@@ -11,6 +11,9 @@ if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION):
     raise SystemExit("VERSION must be major.minor.patch")
 files = ["Install.ps1", "fragments/bacumi.json", "schemes/bacumi-dark.json", "schemes/bacumi-light.json"]
 files += ["LICENSE", "README.md", "CONTRIBUTING.md", "VERSION", "CHANGELOG.md", "VALIDATION.md", "palette.json", "assets/bacumi-dark.svg", "assets/bacumi-light.svg"]
+files += ["BRAND.md", "brand.json", "assets/icons/provenance.json"]
+files += [f"assets/icons/icon-{mode}.svg" for mode in ("dark", "light")]
+files += [f"assets/icons/icon-{mode}-{size}.png" for mode in ("dark", "light") for size in (16, 32, 128, 256, 512, 1024)]
 out = ROOT / "out"
 out.mkdir(exist_ok=True)
 archive = out / f"{NAME}-{VERSION}.zip"

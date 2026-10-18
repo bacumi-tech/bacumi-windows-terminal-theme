@@ -1,0 +1,21 @@
+{
+  "source": "Original Bacumi product SVGs; deterministic vector geometry, not the company mark.",
+  "license": "MIT",
+  "renderer": "PyMuPDF 1.27.2.3",
+  "files": {
+    "icon-dark.svg": "f794b6e597037f70b84358f6c867c517d6b1e28cccc721d7265fac13538eb4f0",
+    "icon-dark-16.png": "1b36a02457028b6fcdbc387a7d44499c010a2af375fd23ef1a526b2489bb48ec",
+    "icon-dark-32.png": "13293434f5c4b99ed12f5f351bbd034da0ebf93e0aa08d69bde37d83f19d2d8b",
+    "icon-dark-128.png": "f461f81e6822c701aac92400a577882a2847fa1bd1d46f761cb06a841fd4fda7",
+    "icon-dark-256.png": "e2d342e7a6da2a7e8d171957d784def843652d38f40da7e0e75cfe5e49264d9d",
+    "icon-dark-512.png": "2ab271ff408707ffc586dd7dd2c733bb9dce98933c2529902e653e50a2191335",
+    "icon-dark-1024.png": "43ff136ae8721bd2ef8f4bc6c874316c6e66e159b2663f8c32776477c3f27fbc",
+    "icon-light.svg": "8284cc71e82cd5051737c7d9c775b24dc1ecc9ecaf50634de1cac0bf22a84008",
+    "icon-light-16.png": "466c49c17ffb9da54668cf45cd40d9ff3463907ab249fcb33b9ba9c5eba2a742",
+    "icon-light-32.png": "bf97a18b17bf0a6b0c02c9e8b1b60c7c56d528e6be78e32ea780ca59354428ad",
+    "icon-light-128.png": "6a8f267a4e2c394ae80324eebb091d2f3e254d37c21781c7d5c3060cbb720514",
+    "icon-light-256.png": "d75f3cbf8d534f6414647bef4c4662ea6c01a14a55c3ca8ffa548b29a00f6440",
+    "icon-light-512.png": "f0c73e2129fe469a526f3baa167f73ea109969b884a9309d9a992d35d94a7545",
+    "icon-light-1024.png": "34a1f2e82ee68030376262ba78270d5ba591a19ed9bbc2a2a2b13ccc5ff0eab2"
+  }
+}

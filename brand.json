@@ -1,0 +1,14 @@
+{
+  "brandVersion": "1.0",
+  "product": "Windows Terminal",
+  "master": {
+    "graphite": "#0F1115",
+    "charcoal": "#1E2127",
+    "orange": "#FF6A00",
+    "amber": "#FFB347",
+    "beige": "#F3E7D6",
+    "off_white": "#FAFAF8"
+  },
+  "paletteRevision": "bacumi-terminal-1",
+  "paletteSha256": "f9d06a7fe38a7036a99c7f8d2e0bb37f0c0b23c582adc218ed92bed70e678a4b"
+}
