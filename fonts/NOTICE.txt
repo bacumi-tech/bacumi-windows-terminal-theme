@@ -1,0 +1,17 @@
+MesloLGS NF — optional external font
+
+Source: https://github.com/romkatv/powerlevel10k-media
+Pinned revision: 145eb9fbc2f42ee408dacd9b22d8e6e0e553f83d
+Upstream license notice is retained in LICENSE-MesloLGS-NF.txt.
+The full Apache License 2.0 is in Apache-2.0.txt.
+
+Copyright embedded in each of the four pinned font files:
+Copyright © 2009 Apple Inc. Copyright © 2006 by Tavmjong Bah.
+Copyright © 2003 by Bitstream, Inc. All Rights Reserved.
+
+Upstream Meslo notice: Copyright 2009, 2010, 2013 André Berg.
+The final recommended MesloLGS NF font is described as Apache-licensed:
+https://github.com/romkatv/powerlevel10k#how-was-the-recommended-font-created
+
+These notices describe the externally downloaded fonts, not Bacumi code.
+No font binaries are bundled with the theme or its release archive.

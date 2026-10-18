@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="330" viewBox="0 0 900 330" role="img" aria-label="Illustrated Bacumi Light developer prompt">
+<rect width="900" height="330" rx="16" fill="#FAFAF8"/>
+<g font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="20">
+<text x="30" y="45" fill="#30343C">BACUMI LIGHT · NATIVE DEVELOPER PROMPT</text>
+<text x="30" y="105"><tspan fill="#2F6084">~/work/project</tspan><tspan fill="#42653C">  git:feature/auth</tspan><tspan fill="#565F6B">  +2 ~1 ?3  ahead:1</tspan></text>
+<text x="30" y="142" fill="#A34100">&gt;</text>
+<text x="30" y="202"><tspan fill="#2F6084">~/work/project</tspan><tspan fill="#42653C">  git:main</tspan><tspan fill="#565F6B">  node:22.0.0  3.2s</tspan></text>
+<text x="30" y="239"><tspan fill="#B42318">!1</tspan><tspan fill="#A34100"> &gt;</tspan></text>
+<text x="30" y="301" fill="#565F6B" font-size="14">Illustration · ASCII works without a special font · Git never fetches remotes</text>
+</g></svg>

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — native developer prompt preview
+
+- Add native developer prompts with Bacumi Dark and Light, detailed Git state,
+  relevant runtime versions, command failures, duration and session context.
+- Offer compact layouts, width adaptation, plain text and optional font icons.
+- Preserve existing theme installations and provide independent safe installers.
+- Add optional MesloLGS NF download/install with pinned SHA-256 checks and retained
+  upstream Apache 2.0 notices; font binaries are not bundled.
+- Expand installation guidance, semantic fixtures, native tests and diagnostics.
+- Remain a preview pending native Terminal/WSL visual acceptance.
+
 ## 0.1.1 — 2026-10-18 (preview)
 
 - Verify both variants against the Bacumi Brand v1.0 editor adaptation.

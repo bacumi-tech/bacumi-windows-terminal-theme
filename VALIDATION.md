@@ -44,3 +44,47 @@ CI validates the approved palette snapshot, exact master colors, generated SVG
 consistency, PNG dimensions and source/export hashes. The brand checks require
 only Python's standard library. Artwork export is an optional contributor step.
 The existing native Windows Terminal/WSL visual-review limits still apply.
+
+## Native developer prompt and optional font — 0.2.0 preview
+
+Local PowerShell 7.6.7/macOS tests cover shared semantic Git fixtures and actual
+Git states/operations, previous success/failure and native exit-code handling,
+working-directory preservation, enable/disable/restore and repeated activation,
+40-column widths, Unicode/control escaping, Dark/Light roles, plain/ANSI/truecolor
+and opt-in icons. Native Windows CI runs prompt and ownership-safe installer
+suites on both Windows PowerShell 5.1 and PowerShell 7.
+
+The optional font tests use four controlled source fixtures and temporary
+directories; Windows uses a unique test HKCU registration key. Tests include
+WhatIf, partial/corrupt downloads, invalid manifests, failed mutation rollback,
+repeat/update/removal, existing matching/conflicting fonts, local edits and
+registry ownership. The official immutable font files were checked against the
+committed hashes during development. No font binaries ship in the release ZIP.
+The native font installer requires sign-out/sign-in to refresh availability
+across apps; it does not edit Terminal profiles or automatically enable icons.
+
+`python3 scripts/check-package.py` verifies the archive checksum, extracts the
+actual release ZIP, installs/imports/enables/disables the module from a temporary
+module directory and removes only installer-owned files.
+
+These checks do not replace Windows Terminal GUI/WSL rendering acceptance.
+Both native prompts remain previews pending that visual/font review.
+
+### Performance sample
+
+`scripts/benchmark-prompt.ps1 -Samples 30` was run on macOS 27.0.1 ARM64
+(10 logical CPUs), official PowerShell 7.6.7, local temporary storage. Cold timing
+includes a new PowerShell process, module import and first non-Git prompt.
+The large case uses 3,000 tracked, 100 modified and 100 untracked files.
+
+| Case | Median ms | 95th percentile ms |
+| --- | ---: | ---: |
+| Cold process + import + first prompt | 471.51 | 493.52 |
+| Warm non-Git prompt | 16.30 | 21.79 |
+| Large Git, Full | 144.04 | 186.48 |
+| Large Git, Fast | 139.46 | 142.44 |
+
+Results are diagnostic, not cross-platform performance promises. Windows CI
+prints separate PowerShell 5.1 and 7 samples. Git checks use one local porcelain
+status query per prompt; `-GitMode Fast` suppresses expensive detailed scanning,
+and `-GitMode Off` skips Git. Runtime version probes have bounded caching.

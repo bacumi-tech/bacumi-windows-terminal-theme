@@ -1,0 +1,82 @@
+[
+  {
+    "name": "non-git",
+    "porcelain": "",
+    "expected": null
+  },
+  {
+    "name": "unborn",
+    "porcelain": "# branch.oid (initial)\n# branch.head main\n",
+    "expected": {
+      "branch": "main",
+      "unborn": true,
+      "detached": false,
+      "staged": 0,
+      "unstaged": 0,
+      "untracked": 0,
+      "conflicts": 0,
+      "ahead": null,
+      "behind": null
+    }
+  },
+  {
+    "name": "clean",
+    "porcelain": "# branch.oid abcdef1234567890\n# branch.head main\n",
+    "expected": {
+      "branch": "main",
+      "unborn": false,
+      "detached": false,
+      "staged": 0,
+      "unstaged": 0,
+      "untracked": 0,
+      "conflicts": 0,
+      "ahead": null,
+      "behind": null
+    }
+  },
+  {
+    "name": "changes",
+    "porcelain": "# branch.oid abcdef1234567890\n# branch.head feature/auth\n# branch.upstream origin/feature/auth\n# branch.ab +2 -1\n1 M. N... 100644 100644 100644 a b staged\n1 .M N... 100644 100644 100644 a b unstaged\n1 MM N... 100644 100644 100644 a b both\n? new file\nu UU N... 100644 100644 100644 100644 a b c conflict\n",
+    "expected": {
+      "branch": "feature/auth",
+      "unborn": false,
+      "detached": false,
+      "staged": 2,
+      "unstaged": 2,
+      "untracked": 1,
+      "conflicts": 1,
+      "ahead": 2,
+      "behind": 1
+    }
+  },
+  {
+    "name": "detached",
+    "porcelain": "# branch.oid abcdef1234567890\n# branch.head (detached)\n",
+    "expected": {
+      "branch": "abcdef1",
+      "unborn": false,
+      "detached": true,
+      "staged": 0,
+      "unstaged": 0,
+      "untracked": 0,
+      "conflicts": 0,
+      "ahead": null,
+      "behind": null
+    }
+  },
+  {
+    "name": "missing-upstream",
+    "porcelain": "# branch.oid abcdef1234567890\n# branch.head main\n",
+    "expected": {
+      "branch": "main",
+      "unborn": false,
+      "detached": false,
+      "staged": 0,
+      "unstaged": 0,
+      "untracked": 0,
+      "conflicts": 0,
+      "ahead": null,
+      "behind": null
+    }
+  }
+]
