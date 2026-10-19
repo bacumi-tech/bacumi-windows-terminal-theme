@@ -128,3 +128,35 @@ the actual Windows checks; Unix ordinary child cleanup was tested on Mac.
 The formatter matrix contains 288 renders; process regressions include slow/hung
 tools, input reads, stdout/stderr limits, failures, literal executable paths,
 shared budget, unavailable-HEAD fallback and failure-cache recovery.
+
+## Startup and Windows Git budgets — 2026-10-19
+
+The native helper's existing C# code now lives in `prompt/NativeProbe.cs`.
+The installer compiles it in a fresh, profile-free process for the current .NET
+major, before replacing the existing installation. Installed imports load the
+assembly bytes without invoking the compiler or locking the file on Windows.
+Source checkouts and a different .NET major keep the standalone source fallback;
+rerun the installer in the PowerShell edition you use to prepare its helper.
+
+Tests cover fresh installed imports with runtime compilation forbidden, a real
+Git probe, exclusive access to the loaded DLL, legacy two-file receipts, obsolete
+helper removal, compiler failure before mutation, local source/DLL edits and
+literal installation paths. Generated binaries are installer-owned and tracked
+by the existing receipt; the release ZIP carries source rather than binaries.
+
+A reported Windows Git query took 488.2611 ms, exceeding the old shared 180 ms
+budget. Git now has a 750 ms limit and a 256 KiB output cap. Runtime-version checks
+retain a separate shared 180 ms budget after Git, so a valid slower Git query
+does not prevent runtime discovery. Full mode skips nested submodule working-tree
+scans but retains tracked submodule commit changes. Tests include valid Git
+queries beyond 180 ms, valid status output beyond 64 KiB, hung commands and
+process cleanup. Worst-case subprocess budgets total approximately 930 ms;
+filesystem, command discovery and OS scheduling remain outside those bounds.
+
+The benchmark now installs into a temporary module directory and measures the
+installed path, with import/activation/first-prompt phases. Local macOS ARM64
+PowerShell 7.6.7 diagnostics observed a five-sample median of 448.16 ms for a
+fresh process through its first prompt, including a 140.64 ms module import.
+Before the change, three repository samples took 861–885 ms, with 406–415 ms
+spent compiling at import. These are local diagnostic samples, not proof of the
+reported 11,089 ms Windows profile load or a Windows performance guarantee.

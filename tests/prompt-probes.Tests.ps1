@@ -49,7 +49,8 @@ try {
         $clock = [Diagnostics.Stopwatch]::StartNew()
         $context = if ($scenario -eq 'budget') { & $module { $script:runtimeCache = @{}; Invoke-BacumiPrompt -PreviousSuccess $true -PreviousNativeExit 37 } } else { @(Read-Context) }
         $elapsed = $clock.ElapsedMilliseconds
-        Assert ($elapsed -lt 700) "$scenario probe exceeded prompt deadline: ${elapsed}ms"
+        $limit = if ($scenario -eq 'budget') { 1200 } else { 700 }
+        Assert ($elapsed -lt $limit) "$scenario probe exceeded prompt deadline: ${elapsed}ms"
         if ($scenario -in @('slow','hung','large','failing','child')) { Assert ($context -notcontains 'node:22.4.0') "$scenario probe must omit unavailable context" }
         if ($scenario -in @('stdin','environment')) { Assert ($context -contains 'node:22.4.0') "$scenario probe lost expected version (stdin must be closed; manager downloads disabled)" }
         if ($scenario -eq 'failing') {
@@ -79,18 +80,26 @@ try {
         }
         Write-Host "$scenario probe passed (${elapsed}ms)."
     }
+    Write-Tool git 'sleep 0.4; printf "# branch.oid abcdef1234567890\\n# branch.head main\\n"' 'powershell.exe -NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Milliseconds 300"`r`necho # branch.oid abcdef1234567890`r`necho # branch.head main'
+    $clock.Restart()
+    $state = & $module { param($directory) Get-BacumiGit $directory } $sandbox
+    Assert ($null -ne $state -and $state.branch -eq 'main' -and -not $state.unavailable) 'Git taking longer than 180ms must return real status within the 750ms Git budget'
+    Assert ($clock.ElapsedMilliseconds -lt 1100) 'Moderate Git probe exceeded its bounded deadline'
+    Write-Tool git 'printf "# branch.oid abcdef1234567890\n# branch.head main\n"; i=0; while [ "$i" -lt 1000 ]; do printf "1 .M N... 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb changed%s\n" "$i"; i=$((i+1)); done' 'echo # branch.oid abcdef1234567890`r`necho # branch.head main`r`nfor /L %%i in (1,1,1000) do echo 1 .M N... 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb changed%%i'
+    $state = & $module { param($directory) Get-BacumiGit $directory } $sandbox
+    Assert ($null -ne $state -and -not $state.unavailable -and $state.unstaged -eq 1000) 'Valid Git status above 64KiB must fit the bounded 256KiB capture'
     # Git uses the same closed-input, bounded-output and timeout path.
     Write-Tool git 'sleep 1; echo "# branch.head late"' 'ping -n 3 127.0.0.1 >nul & echo # branch.head late'
     $clock.Restart()
     $state = & $module { param($directory) Get-BacumiGit $directory } $sandbox
-    Assert ($clock.ElapsedMilliseconds -lt 700 -and $null -ne $state -and $state.branch -eq 'main' -and $state.unavailable) 'Timed out Git must preserve the HEAD branch and explicitly mark status unavailable within deadline'
+    Assert ($clock.ElapsedMilliseconds -lt 1100 -and $null -ne $state -and $state.branch -eq 'main' -and $state.unavailable) 'Timed out Git must preserve the HEAD branch and explicitly mark status unavailable within deadline'
     Assert ($state.staged -eq 0 -and $state.unstaged -eq 0 -and $state.untracked -eq 0 -and $null -eq $state.ahead -and $null -eq $state.behind) 'Timed out Git must discard partial counts and upstream data'
     foreach ($gitCase in @('failing','large')) {
         if ($gitCase -eq 'failing') { Write-Tool git 'printf "# branch.head fake\n"; exit 9' "echo # branch.head fake`r`nexit /b 9" }
         else { Write-Tool git 'while :; do printf "# branch.head fake %0200d\n" 0; done' 'for /L %%i in (1,1,100000) do echo # branch.head fake xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }
         $clock.Restart()
         $state = & $module { param($directory) Get-BacumiGit $directory } $sandbox
-        Assert ($clock.ElapsedMilliseconds -lt 700 -and $null -ne $state -and $state.branch -eq 'main' -and $state.unavailable) "$gitCase Git must preserve HEAD and mark partial status unavailable within deadline"
+        Assert ($clock.ElapsedMilliseconds -lt 1100 -and $null -ne $state -and $state.branch -eq 'main' -and $state.unavailable) "$gitCase Git must preserve HEAD and mark partial status unavailable within deadline"
     }
     $headPath = Join-Path $sandbox '.git/HEAD'
     $originalHead = [IO.File]::ReadAllText($headPath)

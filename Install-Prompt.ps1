@@ -19,7 +19,10 @@ if (-not $ModuleRoot) {
 $ModuleRoot = [IO.Path]::GetFullPath($ModuleRoot)
 $destination = Join-Path $ModuleRoot 'BacumiPrompt'
 $marker = Join-Path $destination '.bacumi-prompt-installed.json'
-$names = @('BacumiPrompt.psd1', 'BacumiPrompt.psm1')
+$sourceNames = @('BacumiPrompt.psd1', 'BacumiPrompt.psm1', 'NativeProbe.cs')
+$assemblyName = 'BacumiPrompt.NativeProbe.net' + [Environment]::Version.Major + '.dll'
+$installNames = $sourceNames + $assemblyName
+$names = $installNames
 $source = Join-Path $PSScriptRoot 'prompt'
 function Assert-NotLinked([string] $Path) {
     $cursor = $Path
@@ -43,13 +46,14 @@ if (Test-Path -LiteralPath $destination) {
     $oldFiles = @($receipt.files.PSObject.Properties)
     if ($oldFiles.Count -eq 0) { throw 'Empty prompt installation receipt.' }
     foreach ($file in $oldFiles) {
-        if ($file.Name -notin $names -or $file.Value -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid owned filename or checksum in prompt receipt.' }
+        if (($file.Name -notin $sourceNames -and $file.Name -notmatch '^BacumiPrompt\.NativeProbe\.net[1-9][0-9]*\.dll$') -or $file.Value -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid owned filename or checksum in prompt receipt.' }
         $target = Join-Path $destination $file.Name
         Assert-NotLinked $target
         if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $file.Value) {
             throw "Prompt file missing or modified locally: $target. Back it up or move the installation before replacing it."
         }
     }
+    $names = @($installNames + @($oldFiles.Name) | Select-Object -Unique)
     foreach ($name in $names) {
         $target = Join-Path $destination $name
         Assert-NotLinked $target
@@ -66,7 +70,7 @@ if ($Uninstall) {
     return
 }
 $hashes = [ordered]@{}
-foreach ($name in $names) {
+foreach ($name in $sourceNames) {
     $payload = Join-Path $source $name
     if (-not (Test-Path -LiteralPath $payload -PathType Leaf)) { throw "Release is missing prompt file: $name" }
     $hashes[$name] = (Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash
@@ -79,7 +83,15 @@ if ($PSCmdlet.ShouldProcess($destination, 'Install or update native Bacumi Power
     New-Item -ItemType Directory -Path $staging | Out-Null
     $backup = @{}; $oldMarker = $null; $created = -not (Test-Path -LiteralPath $destination)
     try {
-        foreach ($name in $names) { Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $staging $name) }
+        foreach ($name in $sourceNames) { Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $staging $name) }
+        # A fresh compiler process also works when this shell has already loaded the type.
+        $escapedSource = (Join-Path $staging 'NativeProbe.cs').Replace("'", "''")
+        $escapedAssembly = (Join-Path $staging $assemblyName).Replace("'", "''")
+        $compile = "Add-Type -LiteralPath '$escapedSource' -OutputAssembly '$escapedAssembly' -OutputType Library -ErrorAction Stop"
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($compile))
+        & (Get-Process -Id $PID).Path -NoLogo -NoProfile -NonInteractive -EncodedCommand $encoded
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $staging $assemblyName) -PathType Leaf)) { throw 'Native prompt helper compilation failed; installation was not changed.' }
+        $hashes[$assemblyName] = (Get-FileHash -LiteralPath (Join-Path $staging $assemblyName) -Algorithm SHA256).Hash
         $newReceipt = @{ identity = 'bacumi-native-powershell-prompt'; schema = 1; files = $hashes }
         [IO.File]::WriteAllText((Join-Path $staging '.bacumi-prompt-installed.json'), ($newReceipt | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
         if (-not $created) {
@@ -88,7 +100,8 @@ if ($PSCmdlet.ShouldProcess($destination, 'Install or update native Bacumi Power
         }
         New-Item -ItemType Directory -Path $destination -Force | Out-Null
         try {
-            foreach ($name in $names) { Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $destination $name) -Force }
+            foreach ($name in $installNames) { Copy-Item -LiteralPath (Join-Path $staging $name) -Destination (Join-Path $destination $name) -Force }
+            foreach ($name in $names) { if ($name -notin $installNames) { Remove-Item -LiteralPath (Join-Path $destination $name) -Force } }
             Copy-Item -LiteralPath (Join-Path $staging '.bacumi-prompt-installed.json') -Destination $marker -Force
         } catch {
             foreach ($name in $names) {

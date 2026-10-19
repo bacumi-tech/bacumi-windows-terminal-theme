@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3 — 2026-10-19 (preview)
+
+- Compile the native process helper during installation and load the installed
+  binary at startup; keep source-checkout fallback and old-receipt migration.
+- Allow bounded 750 ms Windows Git queries and 256 KiB status output, with a
+  separate 180 ms runtime-version budget. Ignore nested submodule working-tree
+  scans in Full mode; preserve tracked submodule commit changes.
+- Benchmark installed cold startup with separate import, activation and first
+  prompt timings, and test fresh compiled-helper startup without runtime compilation.
+
 ## 0.3.2 — 2026-10-18 (preview)
 
 - Add readable failure summaries beside native exit codes and identify new

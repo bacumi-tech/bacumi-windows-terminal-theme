@@ -16,6 +16,7 @@ files += [f"assets/icons/icon-{mode}.svg" for mode in ("dark", "light")]
 files += [f"assets/icons/icon-{mode}-{size}.png" for mode in ("dark", "light") for size in (16, 32, 128, 256, 512, 1024)]
 files += ["fonts/meslolgs-nf.tsv", "fonts/LICENSE-MesloLGS-NF.txt", "fonts/Apache-2.0.txt", "fonts/NOTICE.txt"]
 files += ["Install-Prompt.ps1", "Install-Font.ps1", "prompt/BacumiPrompt.psm1", "prompt/BacumiPrompt.psd1"]
+files += ["prompt/NativeProbe.cs"]
 files += ["assets/developer-dark.svg", "assets/developer-light.svg"]
 out = ROOT / "out"
 out.mkdir(exist_ok=True)

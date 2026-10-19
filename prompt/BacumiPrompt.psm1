@@ -8,164 +8,21 @@ $script:settings = @{}
 $script:lastObservedError = $null
 
 # One in-process helper drains both pipes without PowerShell callbacks or jobs.
-# Compile once per shell; module reloads reuse the type. Windows jobs also own .cmd children.
+# Installed helpers are compiled during setup, not each shell startup.
 if (-not ('BacumiPrompt.NativeProbe' -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Diagnostics;
-using System.IO;
-using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-namespace BacumiPrompt {
-    public sealed class ProbeResult {
-        public bool Success;
-        public string Output = "";
+    $assembly = Join-Path $PSScriptRoot ('BacumiPrompt.NativeProbe.net' + [Environment]::Version.Major + '.dll')
+    if ([IO.File]::Exists($assembly)) {
+        # Load bytes so Windows does not lock the installed DLL during updates.
+        $null = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($assembly))
+    } else {
+        # Source checkouts and a different .NET major retain the standalone fallback.
+        Add-Type -LiteralPath (Join-Path $PSScriptRoot 'NativeProbe.cs')
     }
-    public static class NativeProbe {
-        private sealed class Capture {
-            internal readonly StringBuilder Text = new StringBuilder();
-            internal int Overflow;
-        }
-        private static void Drain(StreamReader stream, Capture capture, int limit) {
-            try {
-                char[] buffer = new char[1024];
-                int count;
-                while ((count = stream.Read(buffer, 0, buffer.Length)) > 0) {
-                    lock (capture.Text) {
-                        if (capture.Text.Length + count > limit) {
-                            Interlocked.Exchange(ref capture.Overflow, 1);
-                            return;
-                        }
-                        capture.Text.Append(buffer, 0, count);
-                    }
-                }
-            } catch (IOException) {} catch (ObjectDisposedException) {}
-        }
-        // CommandLineToArgvW-compatible quoting for ProcessStartInfo.Arguments (.NET Framework).
-        private static string Quote(string value) {
-            var output = new StringBuilder("\"");
-            int slashes = 0;
-            foreach (char c in value) {
-                if (c == '\\') { slashes++; continue; }
-                if (c == '"') { output.Append('\\', slashes * 2 + 1); output.Append(c); }
-                else { output.Append('\\', slashes); output.Append(c); }
-                slashes = 0;
-            }
-            output.Append('\\', slashes * 2); output.Append('"');
-            return output.ToString();
-        }
-        [StructLayout(LayoutKind.Sequential)] private struct BasicLimit {
-            public long ProcessTime, JobTime;
-            public uint Flags;
-            public UIntPtr MinWorkingSet, MaxWorkingSet;
-            public uint ActiveProcessLimit;
-            public UIntPtr Affinity;
-            public uint PriorityClass, SchedulingClass;
-        }
-        [StructLayout(LayoutKind.Sequential)] private struct IoCounters {
-            public ulong ReadOps, WriteOps, OtherOps, ReadBytes, WriteBytes, OtherBytes;
-        }
-        [StructLayout(LayoutKind.Sequential)] private struct ExtendedLimit {
-            public BasicLimit Basic;
-            public IoCounters Io;
-            public UIntPtr ProcessMemory, JobMemory, PeakProcessMemory, PeakJobMemory;
-        }
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
-        [DllImport("kernel32.dll")] private static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref ExtendedLimit info, uint length);
-        [DllImport("kernel32.dll")] private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
-        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
-        private static IntPtr CreateOwnedJob() {
-            IntPtr job = CreateJobObject(IntPtr.Zero, null);
-            if (job == IntPtr.Zero) return job;
-            var limit = new ExtendedLimit();
-            limit.Basic.Flags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-            if (!SetInformationJobObject(job, 9, ref limit, (uint)Marshal.SizeOf(limit))) { CloseHandle(job); return IntPtr.Zero; }
-            return job;
-        }
-        private static void Stop(Process process) {
-            try {
-                MethodInfo killTree = typeof(Process).GetMethod("Kill", new Type[] { typeof(bool) });
-                if (killTree != null) killTree.Invoke(process, new object[] { true });
-                else process.Kill();
-            } catch {} // It may have exited between the deadline and termination.
-        }
-        public static ProbeResult Run(string executable, string[] arguments, string directory, int milliseconds, int outputLimit) {
-            var result = new ProbeResult();
-            if (milliseconds <= 0) return result;
-            bool windows = Environment.OSVersion.Platform == PlatformID.Win32NT;
-            var start = new ProcessStartInfo();
-            start.FileName = executable;
-            var commandLine = new StringBuilder();
-            foreach (string argument in arguments) { if (commandLine.Length > 0) commandLine.Append(' '); commandLine.Append(Quote(argument)); }
-            start.Arguments = commandLine.ToString();
-            if (windows && (executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || executable.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))) {
-                // Expand the path once from the child environment; literal % or ! in paths
-                // must never become another environment expansion. Probe arguments are fixed switches.
-                start.FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-                start.EnvironmentVariables["BACUMI_PROMPT_PROBE_EXECUTABLE"] = executable;
-                start.Arguments = "/d /s /v:off /c \"\"%BACUMI_PROMPT_PROBE_EXECUTABLE%\" " + start.Arguments + "\"";
-            }
-            start.WorkingDirectory = directory;
-            start.UseShellExecute = false;
-            start.CreateNoWindow = true;
-            start.RedirectStandardInput = true;
-            start.RedirectStandardOutput = true;
-            start.RedirectStandardError = true;
-            start.EnvironmentVariables["GOTOOLCHAIN"] = "local";
-            start.EnvironmentVariables["RUSTUP_AUTO_INSTALL"] = "0";
-            start.EnvironmentVariables["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
-            start.EnvironmentVariables["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
-            start.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
-            start.EnvironmentVariables["GCM_INTERACTIVE"] = "Never";
-            IntPtr job = IntPtr.Zero;
-            var process = new Process();
-            process.StartInfo = start;
-            var clock = Stopwatch.StartNew();
-            try {
-                if (windows) {
-                    job = CreateOwnedJob();
-                    if (job == IntPtr.Zero) return result; // No unmanaged child without tree cleanup.
-                }
-                process.Start();
-                if (windows && !AssignProcessToJobObject(job, process.Handle)) { Stop(process); return result; }
-                process.StandardInput.Close(); // EOF, never borrow the interactive terminal.
-                var stdout = new Capture();
-                var stderr = new Capture();
-                var outputStream = process.StandardOutput;
-                var errorStream = process.StandardError;
-                Task output = Task.Factory.StartNew(() => Drain(outputStream, stdout, outputLimit), TaskCreationOptions.LongRunning);
-                Task error = Task.Factory.StartNew(() => Drain(errorStream, stderr, 4096), TaskCreationOptions.LongRunning);
-                while (clock.ElapsedMilliseconds < milliseconds) {
-                    if (stdout.Overflow != 0 || stderr.Overflow != 0) break;
-                    if (process.HasExited && output.IsCompleted && error.IsCompleted) {
-                        if (process.ExitCode == 0 && stdout.Overflow == 0 && stderr.Overflow == 0) {
-                            lock (stdout.Text) { result.Output = stdout.Text.ToString(); }
-                            result.Success = true;
-                        }
-                        break;
-                    }
-                    Thread.Sleep(1);
-                }
-            } catch {} // Missing, inaccessible or unsupported applications omit their context.
-            finally {
-                if (job != IntPtr.Zero) CloseHandle(job); // Ends the entire Windows job, including detached .cmd children.
-                Stop(process);
-                try { process.WaitForExit(20); } catch {}
-                process.Dispose();
-            }
-            return result;
-        }
-    }
-}
-'@
 }
 $script:probeClock = $null
 
-function Invoke-BacumiProbe([string] $Executable, [string[]] $Arguments, [string] $Directory, [int] $OutputLimit = 4096) {
-    $remaining = 180
+function Invoke-BacumiProbe([string] $Executable, [string[]] $Arguments, [string] $Directory, [int] $OutputLimit = 4096, [int] $TimeoutMilliseconds = 180) {
+    $remaining = $TimeoutMilliseconds
     if ($null -ne $script:probeClock) { $remaining -= [int]$script:probeClock.ElapsedMilliseconds }
     return [BacumiPrompt.NativeProbe]::Run($Executable, $Arguments, $Directory, [Math]::Max(0, $remaining), $OutputLimit)
 }
@@ -288,8 +145,9 @@ function Get-BacumiGit([string] $Directory) {
     if ($git) {
         $arguments = @('--no-optional-locks', '-c', 'core.fsmonitor=false', 'status', '--porcelain=v2', '--branch', '-z')
         if ($script:settings.GitMode -eq 'Fast') { $arguments += @('--untracked-files=no', '--ignore-submodules=all') }
-        else { $arguments += '--untracked-files=normal' }
-        $probe = Invoke-BacumiProbe $git.Source $arguments $Directory 65536
+        else { $arguments += @('--untracked-files=normal', '--ignore-submodules=dirty') }
+        # Git for Windows can need more than the short runtime-version budget.
+        $probe = Invoke-BacumiProbe $git.Source $arguments $Directory 262144 750
         if ($probe.Success) { $state = ConvertFrom-BacumiGitStatus $probe.Output }
     }
     if ($null -eq $state) { $state = Get-BacumiGitHead $gitDirectory }
@@ -518,6 +376,7 @@ function Invoke-BacumiPrompt {
         $git = $null; $context = @(); $duration = 0
         if ($location.Provider.Name -eq 'FileSystem') {
             $git = Get-BacumiGit $directory
+            $script:probeClock.Restart()
             $context += @(Get-BacumiRuntimes $directory)
         }
         if ($env:SSH_CONNECTION -or $env:SSH_TTY -or [Environment]::UserName -eq 'root' -or $script:settings.Elevated) {

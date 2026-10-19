@@ -6,15 +6,16 @@
   <h1>Bacumi for Windows Terminal</h1>
   <p>Bacumi colors and a native developer prompt, in Dark and Light.</p>
   <p>
-    <a href="https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.2">Download 0.3.2 preview</a> ·
+    <a href="https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.3">Download 0.3.3 preview</a> ·
     <a href="#installation">Installation</a> ·
     <a href="BRAND.md">Brand and icons</a> ·
     <a href="LICENSE">MIT license</a>
   </p>
 </div>
 
-**0.3.2 preview.** Adds readable error summaries to the Bacumi Dark/Light
-developer prompts. Download the ZIP below or install from the Git checkout.
+**0.3.3 preview.** Prepares the native helper during installation for faster
+startup, and gives Windows Git queries a realistic bounded budget. Download the
+ZIP below or install from the Git checkout.
 
 Bacumi Dark pairs a Graphite background with warm accents. Bacumi Light brings
 the same color roles to an Off-White workspace. Both include a complete ANSI
@@ -67,13 +68,13 @@ Installation is per user and requires no administrator access, Git or package ma
 
 ### 1. Download and extract
 
-Download [bacumi-windows-terminal-theme-0.3.2.zip](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/download/v0.3.2/bacumi-windows-terminal-theme-0.3.2.zip)
-from the [GitHub release](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.2).
+Download [bacumi-windows-terminal-theme-0.3.3.zip](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/download/v0.3.3/bacumi-windows-terminal-theme-0.3.3.zip)
+from the [GitHub release](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.3).
 The release also includes `SHA256SUMS`. From your download folder, calculate
 the ZIP's SHA-256 and compare it with the entry in that checksum file:
 
 ```powershell
-Get-FileHash .\bacumi-windows-terminal-theme-0.3.2.zip -Algorithm SHA256
+Get-FileHash .\bacumi-windows-terminal-theme-0.3.3.zip -Algorithm SHA256
 ```
 
 Extract the ZIP and open PowerShell in the extracted folder containing `Install.ps1`.
@@ -121,10 +122,14 @@ Manage manual copies manually. The installer protects folders it does not own.
 
 ## Native PowerShell developer prompt
 
-From the same extracted release folder, install the module independently of the
-color schemes:
+From the same extracted release folder, use the command matching your everyday
+PowerShell edition to install the prompt independently of the color schemes:
 
 ```powershell
+# PowerShell 7
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install-Prompt.ps1
+
+# Windows PowerShell 5.1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Prompt.ps1
 ```
 
@@ -143,6 +148,12 @@ installation and interactive PowerShell editions use different module paths.
 Use an absolute `Import-Module` path if the printed destination is outside the
 current session's module search path. Disable any existing prompt-engine
 initialization while trying Bacumi.
+
+The installer compiles the native probe helper once for the current .NET major.
+Run `Install-Prompt.ps1` from the PowerShell edition you normally use. New windows
+load that helper directly instead of compiling it again. Re-run the installer
+after switching .NET major versions. Source checkouts retain the compile-on-import
+fallback; neither route downloads a compiler or changes your execution policy.
 
 | Indicator | Meaning |
 | --- | --- |
