@@ -25,6 +25,7 @@ jobs:
         shell: powershell
         run: |
           $PSVersionTable.PSVersion
+          ./tests/remote-install.Tests.ps1
           ./tests/install.Tests.ps1
           ./tests/prompt.Tests.ps1
           ./tests/prompt-probes.Tests.ps1
@@ -36,6 +37,7 @@ jobs:
         shell: pwsh
         run: |
           $PSVersionTable.PSVersion
+          ./tests/remote-install.Tests.ps1
           ./tests/install.Tests.ps1
           ./tests/prompt.Tests.ps1
           ./tests/prompt-probes.Tests.ps1

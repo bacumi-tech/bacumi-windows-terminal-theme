@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 — 2026-10-21 (preview)
+
+- Add one-command install/update using versioned release ZIPs and SHA-256 verification.
+- Install terminal schemes and the native prompt while preserving user settings.
+
 ## 0.3.3 — 2026-10-19 (preview)
 
 - Compile the native process helper during installation and load the installed

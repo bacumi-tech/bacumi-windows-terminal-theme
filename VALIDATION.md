@@ -160,3 +160,11 @@ fresh process through its first prompt, including a 140.64 ms module import.
 Before the change, three repository samples took 861–885 ms, with 406–415 ms
 spent compiling at import. These are local diagnostic samples, not proof of the
 reported 11,089 ms Windows profile load or a Windows performance guarantee.
+
+## 0.3.4 preview — 2026-10-21
+
+Remote install/update is tested with local release ZIP fixtures: repeat installation,
+SHA-256 mismatch refusal and failed downloads before installer execution.
+PowerShell coverage also verifies TLS restoration. Hosted Windows PowerShell 5.1
+and PowerShell 7 jobs exercise the same remote-install fixture.
+Native emulator visual/font acceptance remains pending.

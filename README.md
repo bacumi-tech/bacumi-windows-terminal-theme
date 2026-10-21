@@ -6,16 +6,14 @@
   <h1>Bacumi for Windows Terminal</h1>
   <p>Bacumi colors and a native developer prompt, in Dark and Light.</p>
   <p>
-    <a href="https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.3">Download 0.3.3 preview</a> ·
+    <a href="https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.4">Download 0.3.4 preview</a> ·
     <a href="#installation">Installation</a> ·
     <a href="BRAND.md">Brand and icons</a> ·
     <a href="LICENSE">MIT license</a>
   </p>
 </div>
 
-**0.3.3 preview.** Prepares the native helper during installation for faster
-startup, and gives Windows Git queries a realistic bounded budget. Download the
-ZIP below or install from the Git checkout.
+**0.3.4 preview.** Adds one-command installation and updates from verified release archives. Installs both terminal schemes and the native PowerShell prompt.
 
 Bacumi Dark pairs a Graphite background with warm accents. Bacumi Light brings
 the same color roles to an Off-White workspace. Both include a complete ANSI
@@ -59,6 +57,21 @@ font and keybindings stay as configured.
 
 ## Installation
 
+### One command: install or update
+
+Run the same command in PowerShell for a first installation or an update:
+
+```powershell
+& (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -Command '$ErrorActionPreference = "Stop"; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-RestMethod "https://raw.githubusercontent.com/bacumi-tech/bacumi-windows-terminal-theme/main/Install-Remote.ps1" | Invoke-Expression'
+```
+
+This downloads the current versioned preview ZIP, verifies its SHA-256, and installs
+both terminal schemes and the native PowerShell prompt. Local edits, Terminal
+settings and PowerShell profiles are preserved. On first install, choose a scheme
+and add the printed prompt activation lines to your profile; updates keep those
+choices. The execution-policy setting applies only to this installer process.
+Open a new PowerShell tab after updating.
+
 ### Requirements
 
 - Windows with Windows Terminal supporting JSON fragment extensions.
@@ -68,13 +81,13 @@ Installation is per user and requires no administrator access, Git or package ma
 
 ### 1. Download and extract
 
-Download [bacumi-windows-terminal-theme-0.3.3.zip](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/download/v0.3.3/bacumi-windows-terminal-theme-0.3.3.zip)
-from the [GitHub release](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.3).
+Download [bacumi-windows-terminal-theme-0.3.4.zip](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/download/v0.3.4/bacumi-windows-terminal-theme-0.3.4.zip)
+from the [GitHub release](https://github.com/bacumi-tech/bacumi-windows-terminal-theme/releases/tag/v0.3.4).
 The release also includes `SHA256SUMS`. From your download folder, calculate
 the ZIP's SHA-256 and compare it with the entry in that checksum file:
 
 ```powershell
-Get-FileHash .\bacumi-windows-terminal-theme-0.3.3.zip -Algorithm SHA256
+Get-FileHash .\bacumi-windows-terminal-theme-0.3.4.zip -Algorithm SHA256
 ```
 
 Extract the ZIP and open PowerShell in the extracted folder containing `Install.ps1`.
