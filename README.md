@@ -62,10 +62,12 @@ font and keybindings stay as configured.
 Run the same command in PowerShell for a first installation or an update:
 
 ```powershell
-& (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -Command '$ErrorActionPreference = "Stop"; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-RestMethod "https://raw.githubusercontent.com/bacumi-tech/bacumi-windows-terminal-theme/main/Install-Remote.ps1" | Invoke-Expression'
+irm https://bacumi.com/install.ps1 | iex
 ```
 
-This downloads the current versioned preview ZIP, verifies its SHA-256, and installs
+Choose your platform at [bacumi.com/download](https://bacumi.com/download).
+The short URL starts the maintained public installer in a separate PowerShell
+process, downloads the current versioned preview ZIP, verifies its SHA-256, and installs
 both terminal schemes and the native PowerShell prompt. Local edits, Terminal
 settings and PowerShell profiles are preserved. On first install, choose a scheme
 and add the printed prompt activation lines to your profile; updates keep those
